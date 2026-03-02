@@ -4,6 +4,8 @@ import { readFile } from 'node:fs/promises';
 export const READ_ONLY_REQUIRED_MESSAGE =
   'Container root filesystem is writable. Run with --read-only (or read_only: true in docker-compose) and mount /data as writable tmpfs/volume.';
 
+const CONTAINER_CGROUP_MARKERS = ['docker', 'kubepods', 'containerd', 'podman', 'crio', 'lxc'];
+
 interface ContainerRootFilesystemState {
   isContainer: boolean;
   isReadOnly: boolean;
@@ -57,8 +59,59 @@ export function shouldEnforceReadOnlyRootFilesystem(
   }
 }
 
+function containsContainerCgroupMarker(cgroupInfo: string): boolean {
+  const loweredCgroupInfo = cgroupInfo.toLowerCase();
+  return CONTAINER_CGROUP_MARKERS.some((marker) => loweredCgroupInfo.includes(marker));
+}
+
+async function cgroupIndicatesContainer(): Promise<boolean> {
+  const cgroupPaths = ['/proc/1/cgroup', '/proc/self/cgroup'];
+  for (const cgroupPath of cgroupPaths) {
+    try {
+      const cgroupInfo = await readFile(cgroupPath, 'utf8');
+      if (containsContainerCgroupMarker(cgroupInfo)) {
+        return true;
+      }
+    } catch {
+      // Ignore missing or unreadable cgroup files.
+    }
+  }
+  return false;
+}
+
+export function shouldAssumeRunningInContainer(
+  runningInContainerValue: string | undefined = process.env.RUNNING_IN_CONTAINER,
+): boolean {
+  if (!runningInContainerValue) {
+    return false;
+  }
+  switch (runningInContainerValue.trim().toLowerCase()) {
+    case '1':
+    case 'true':
+    case 'yes':
+    case 'on': {
+      return true;
+    }
+    default: {
+      return false;
+    }
+  }
+}
+
+export async function isRunningInContainer() {
+  if (shouldAssumeRunningInContainer()) {
+    return true;
+  }
+
+  if (existsSync('/.dockerenv')) {
+    return true;
+  }
+
+  return cgroupIndicatesContainer();
+}
+
 export async function isContainerRootFilesystemReadOnly() {
-  if (!existsSync('/.dockerenv')) {
+  if (!(await isRunningInContainer())) {
     return {
       isContainer: false,
       isReadOnly: true,

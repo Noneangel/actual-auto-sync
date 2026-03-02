@@ -26,6 +26,7 @@ The service requires the following environment variables:
 - `TIMEZONE`: Timezone for the cron job (default: `Etc/UTC`)
 - `RUN_ON_START`: Whether to run the sync on startup (default: `false`) - Please note that when setting this to `true`, you may get a notice email from SimpleFin (if you use that service), as they expect only a bank sync once a day.
 - `ENFORCE_READ_ONLY`: Optional hard-fail toggle for writable container root filesystems. Set `true` to enforce now (default: `false` for compatibility).
+- `RUNNING_IN_CONTAINER`: Optional container-detection override for uncommon runtimes. Set `true` to force container security checks when auto-detection misses (default: `false`).
 - `ACTUAL_DATA_DIR`: Deprecated legacy data directory override. Kept for compatibility only and planned for removal in the next major release.
 
 Container data defaults to `/data` inside the container.

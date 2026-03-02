@@ -6,7 +6,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   enforceReadOnlyRootFilesystem,
   isContainerRootFilesystemReadOnly,
+  isRunningInContainer,
   isRootFilesystemReadOnly,
+  shouldAssumeRunningInContainer,
   shouldEnforceReadOnlyRootFilesystem,
 } from '../container-security.js';
 
@@ -24,6 +26,7 @@ const ROOT_RO_MOUNTINFO = '36 28 0:32 / / ro,relatime - overlay overlay rw,lower
 describe('container-security', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    delete process.env.RUNNING_IN_CONTAINER;
   });
 
   describe('isRootFilesystemReadOnly', () => {
@@ -45,9 +48,14 @@ describe('container-security', () => {
   describe('enforceReadOnlyRootFilesystem', () => {
     it('skips validation outside containers', async () => {
       vi.mocked(existsSync).mockReturnValue(false);
+      vi.mocked(readFile).mockRejectedValue(new Error('missing cgroup file'));
 
       await expect(enforceReadOnlyRootFilesystem()).resolves.toBeUndefined();
-      expect(readFile).not.toHaveBeenCalled();
+      expect(
+        vi
+          .mocked(readFile)
+          .mock.calls.some(([path]) => String(path) === '/proc/self/mountinfo'),
+      ).toBe(false);
     });
 
     it('passes when container root filesystem is read-only', async () => {
@@ -70,6 +78,7 @@ describe('container-security', () => {
   describe('isContainerRootFilesystemReadOnly', () => {
     it('returns non-container state outside containers', async () => {
       vi.mocked(existsSync).mockReturnValue(false);
+      vi.mocked(readFile).mockRejectedValue(new Error('missing cgroup file'));
 
       await expect(isContainerRootFilesystemReadOnly()).resolves.toEqual({
         isContainer: false,
@@ -79,6 +88,33 @@ describe('container-security', () => {
 
     it('returns container read-only state', async () => {
       vi.mocked(existsSync).mockReturnValue(true);
+      vi.mocked(readFile).mockResolvedValue(ROOT_RO_MOUNTINFO);
+
+      await expect(isContainerRootFilesystemReadOnly()).resolves.toEqual({
+        isContainer: true,
+        isReadOnly: true,
+      });
+    });
+
+    it('detects container state from cgroup markers when /.dockerenv is absent', async () => {
+      vi.mocked(existsSync).mockReturnValue(false);
+      vi.mocked(readFile).mockImplementation(async (path) => {
+        const pathValue = String(path);
+        if (pathValue.includes('cgroup')) {
+          return '12:memory:/kubepods.slice/pod123';
+        }
+        return ROOT_RO_MOUNTINFO;
+      });
+
+      await expect(isContainerRootFilesystemReadOnly()).resolves.toEqual({
+        isContainer: true,
+        isReadOnly: true,
+      });
+    });
+
+    it('allows explicit container override via RUNNING_IN_CONTAINER', async () => {
+      vi.mocked(existsSync).mockReturnValue(false);
+      process.env.RUNNING_IN_CONTAINER = 'true';
       vi.mocked(readFile).mockResolvedValue(ROOT_RO_MOUNTINFO);
 
       await expect(isContainerRootFilesystemReadOnly()).resolves.toEqual({
@@ -101,6 +137,31 @@ describe('container-security', () => {
       expect(shouldEnforceReadOnlyRootFilesystem('false')).toBe(false);
       expect(shouldEnforceReadOnlyRootFilesystem('0')).toBe(false);
       expect(shouldEnforceReadOnlyRootFilesystem('off')).toBe(false);
+    });
+  });
+
+  describe('shouldAssumeRunningInContainer', () => {
+    it('treats true-like values as enabled', () => {
+      expect(shouldAssumeRunningInContainer('true')).toBe(true);
+      expect(shouldAssumeRunningInContainer('1')).toBe(true);
+      expect(shouldAssumeRunningInContainer('yes')).toBe(true);
+      expect(shouldAssumeRunningInContainer('on')).toBe(true);
+    });
+
+    it('defaults to disabled for false-like and missing values', () => {
+      expect(shouldAssumeRunningInContainer(undefined)).toBe(false);
+      expect(shouldAssumeRunningInContainer('false')).toBe(false);
+      expect(shouldAssumeRunningInContainer('0')).toBe(false);
+      expect(shouldAssumeRunningInContainer('off')).toBe(false);
+    });
+  });
+
+  describe('isRunningInContainer', () => {
+    it('returns false when no container signals are present', async () => {
+      vi.mocked(existsSync).mockReturnValue(false);
+      vi.mocked(readFile).mockRejectedValue(new Error('missing cgroup file'));
+
+      await expect(isRunningInContainer()).resolves.toBe(false);
     });
   });
 });
