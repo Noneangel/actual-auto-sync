@@ -52,9 +52,7 @@ describe('container-security', () => {
 
       await expect(enforceReadOnlyRootFilesystem()).resolves.toBeUndefined();
       expect(
-        vi
-          .mocked(readFile)
-          .mock.calls.some(([path]) => String(path) === '/proc/self/mountinfo'),
+        vi.mocked(readFile).mock.calls.some(([path]) => String(path) === '/proc/self/mountinfo'),
       ).toBe(false);
     });
 
