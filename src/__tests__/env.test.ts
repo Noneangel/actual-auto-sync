@@ -190,13 +190,14 @@ describe('Environment Configuration', () => {
     });
 
     describe('ACTUAL_DATA_DIR', () => {
-      it('should accept directory strings', () => {
+      it('should accept directory strings when provided', () => {
         expect(() => actualDataDirSchema.parse('/data')).not.toThrow();
+        expect(() => actualDataDirSchema.parse('./legacy-data')).not.toThrow();
       });
 
-      it('should use default value when not provided', () => {
+      it('should remain optional for backward compatibility', () => {
         const result = actualDataDirSchema.parse(undefined);
-        expect(result).toBe('/data');
+        expect(result).toBeUndefined();
       });
     });
 

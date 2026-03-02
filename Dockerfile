@@ -15,6 +15,12 @@ RUN pnpm run build
 
 
 FROM builder
+ARG APP_UID=1000
+ARG APP_GID=1000
+
+RUN groupmod --non-unique --gid "${APP_GID}" node \
+  && usermod --non-unique --uid "${APP_UID}" --gid "${APP_GID}" node
+
 COPY --from=build --chown=node:node /app/node_modules /app/node_modules
 COPY --from=build --chown=node:node /app/dist /app/dist
 

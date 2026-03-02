@@ -12,6 +12,8 @@ ENV PNPM_HOME="/pnpm"
 ENV PATH="$PNPM_HOME:$PATH"
 
 WORKDIR /app
+RUN chown node:node /app
+RUN mkdir -p /data && chown node:node /data
 
 RUN chown node:node .
 
@@ -33,5 +35,5 @@ COPY --chown=node:node . .
 # Create e2e data directory
 RUN mkdir -p /app/e2e-data
 
-# Run e2e tests
-CMD ["pnpm", "test:e2e"]
+# Run e2e tests without invoking Corepack at runtime.
+CMD ["node", "node_modules/vitest/vitest.mjs", "run", "--config", "vitest.config.e2e.mts"]

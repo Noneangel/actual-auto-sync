@@ -95,9 +95,10 @@ export const serverUrlSchema = z.string().trim().min(1);
 export const serverPasswordSchema = z.string().min(1);
 
 /**
- * Actual data directory
+ * Deprecated data directory override.
+ * @deprecated Use /data in containers and mount /data via tmpfs/volume instead.
  */
-export const actualDataDirSchema = z.string().trim().optional().default('/data');
+export const actualDataDirSchema = z.string().trim().optional();
 
 export const env = createEnv({
   client: {},
@@ -127,6 +128,7 @@ export const env = createEnv({
    * `process.env` or `import.meta.env`.
    */
   runtimeEnv: {
+    ACTUAL_DATA_DIR: await getConfiguration('ACTUAL_DATA_DIR'),
     ACTUAL_BUDGET_SYNC_IDS: await getConfiguration('ACTUAL_BUDGET_SYNC_IDS'),
     ACTUAL_SERVER_PASSWORD: await getConfiguration('ACTUAL_SERVER_PASSWORD'),
     ACTUAL_SERVER_URL: await getConfiguration('ACTUAL_SERVER_URL'),
@@ -138,6 +140,7 @@ export const env = createEnv({
   },
 
   server: {
+    ACTUAL_DATA_DIR: actualDataDirSchema,
     ACTUAL_BUDGET_SYNC_IDS: budgetIdSchema,
     ACTUAL_SERVER_PASSWORD: serverPasswordSchema,
     ACTUAL_SERVER_URL: serverUrlSchema,
@@ -146,6 +149,5 @@ export const env = createEnv({
     LOG_LEVEL: logLevelSchema,
     RUN_ON_START: runOnStartSchema,
     TIMEZONE: timezoneSchema,
-    ACTUAL_DATA_DIR: actualDataDirSchema,
   },
 });
